@@ -1,0 +1,17 @@
+.python-version
+*.pyc
+_bak
+\#*
+._*
+*.gz
+.#*
+.fuse*
+*.gz*
+tmp
+*~
+nohup.out
+_trash
+tmp.py
+
+results
+docs

@@ -1,0 +1,87 @@
+# This config file is assumed to be parsed pyhocon.
+
+# Training hyperparameters.
+max_to_keep = 1         # The number of checkpoints kept.
+max_epoch = 50          # The number of epochs in training.
+learning_rate = 0.001    # Learning rate.
+max_gradient_norm = 5.0 # 
+decay_rate = 0.99       #
+decay_frequency = 100   #
+dropout_rate=0.2        # The dropout ratio in training. 
+train_embedding=true    # Whether to retrain the pretrained embeddings or not.
+batch_size=128          # Batch size.
+
+# Structure.
+num_layers=1                       # The number of layers in MultiRNNCell.
+hidden_size=300                    # The dimension of RNN, and other layers.
+#rnn_type=bidirectional_dynamic_rnn # The name of rnn function in tensorflow.
+cell_type=GRUCell                  # The name of RNNCell class in tensorflow.
+attention_type=""
+encoder{
+  utterance = {
+    encoder_type=RNNEncoder
+    cell_type=${cell_type}
+    output_size=${hidden_size}
+    num_layers=${num_layers}
+  }
+  context = {
+    encoder_type=RNNEncoder
+    cell_type=${cell_type}
+    output_size=${hidden_size}
+    num_layers=${num_layers}
+  }
+}
+decoder{
+  cell_type=${cell_type}
+  output_size=${hidden_size}
+  num_layers=${num_layers}
+}
+model_type=AutoEncoder
+beam_width=5
+length_penalty_weight=0.6 # https://arxiv.org/pdf/1609.08144.pdf
+
+#dataset_type=UbuntuDialogueDataset
+#dataset_path=dataset/ubuntu-dialogue
+dataset_type=DailyDialogDataset
+dataset_path=dataset/dailydialog
+dataset_info { # The train/valid/test dataset.
+  train = {
+    path = ${dataset_path}/train.csv
+    max_lines = 10000 # The maximum size of training data. if 0, all of the training data will be used.
+  }
+  valid = {
+    path = ${dataset_path}/valid.csv
+    max_lines = 50
+  }
+  test = {
+    path = ${dataset_path}/test.csv
+    max_lines = 50
+  }
+}
+
+# Text processing.
+utterance_max_len = 30
+word_max_len = 0
+lowercase=true          # Whether to convert words into lowercase or not.
+normalize_digits=true
+#cbase = true
+cbase = false
+wbase = true
+w_vocab_size = 30000        # The maximum size of the vocabulary. if 0, use all.
+c_vocab_size = 100
+w_embedding_size = 300
+c_embedding_size = 8
+feature_size = 10
+#char_vocab_path = "dataset/embeddings/char_vocab.english.txt"
+
+#Pretrained embeddings.
+embedding_path=dataset/embeddings   # The directory where to put your pretrained embeddings file.
+embeddings=${fasttext_300d_en}
+fasttext_300d_en{
+  path = ${embedding_path}/fasttext/wiki.en.vec
+  skip_first=true
+}
+glove_300d_filtered_en {
+  path = ${embedding_path}/glove.840B.300d.txt.filtered
+  skip_first=false
+}
