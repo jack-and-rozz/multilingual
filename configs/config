@@ -60,7 +60,7 @@ dataset_info { # The train/valid/test dataset.
 }
 
 # Text processing.
-utterance_max_len = 30
+utterance_max_len = 25
 word_max_len = 0
 lowercase=true          # Whether to convert words into lowercase or not.
 normalize_digits=true

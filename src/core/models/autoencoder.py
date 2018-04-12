@@ -288,10 +288,11 @@ class AutoEncoder(ModelBase):
       sys.stdout.flush()
       if math.isnan(step_loss):
         sys.stderr.write('Got a Nan loss.\n')
-        #for x in feed_dict:
-        #  print x
-        #  print feed_dict[x]
-        #exit(1)
+        
+        for x in feed_dict:
+          print x
+          print feed_dict[x]
+        exit(1)
       epoch_time += time.time() - t
       loss += step_loss
       num_steps += 1
