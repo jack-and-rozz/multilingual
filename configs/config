@@ -16,10 +16,10 @@ num_layers=1                       # The number of layers in MultiRNNCell.
 hidden_size=300                    # The dimension of RNN, and other layers.
 #rnn_type=bidirectional_dynamic_rnn # The name of rnn function in tensorflow.
 cell_type=GRUCell                  # The name of RNNCell class in tensorflow.
-attention_type=""
+attention_type="LuongAttention"
 encoder{
   utterance = {
-    encoder_type=RNNEncoder
+    encoder_type=BidirectionalRNNEncoder
     cell_type=${cell_type}
     output_size=${hidden_size}
     num_layers=${num_layers}
@@ -47,27 +47,27 @@ dataset_path=dataset/dailydialog
 dataset_info { # The train/valid/test dataset.
   train = {
     path = ${dataset_path}/train.csv
-    max_lines = 10000 # The maximum size of training data. if 0, all of the training data will be used.
+    max_lines = 0 # The maximum size of training data. if 0, all of the training data will be used.
   }
   valid = {
     path = ${dataset_path}/valid.csv
-    max_lines = 50
+    max_lines = 100
   }
   test = {
     path = ${dataset_path}/test.csv
-    max_lines = 50
+    max_lines = 100
   }
 }
 
 # Text processing.
-utterance_max_len = 30
+utterance_max_len = 25
 word_max_len = 0
 lowercase=true          # Whether to convert words into lowercase or not.
 normalize_digits=true
 #cbase = true
 cbase = false
 wbase = true
-w_vocab_size = 30000        # The maximum size of the vocabulary. if 0, use all.
+w_vocab_size = 20000        # The maximum size of the vocabulary. if 0, use all.
 c_vocab_size = 100
 w_embedding_size = 300
 c_embedding_size = 8

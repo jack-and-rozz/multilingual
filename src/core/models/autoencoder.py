@@ -53,7 +53,6 @@ class AutoEncoder(ModelBase):
 
     with tf.name_scope("Update"):
       self.updates = self.get_updates(self.loss)
-    self.debug = []
     #self.debug = [self.e_inputs_w_ph, self.d_outputs_ph, decoder_inputs, targets, target_length, target_weights]
 
   ###################################################
@@ -177,15 +176,17 @@ class AutoEncoder(ModelBase):
                               keep_prob=self.keep_prob)
     if projection_layer is None:
       with tf.variable_scope('projection') as scope:
-        projection_layer = tf.layers.Dense(config.w_vocab_size, use_bias=True, trainable=True)
+        #projection_layer = tf.layers.Dense(config.w_vocab_size, use_bias=True, trainable=True)
+        projection_layer = tf.layers.Dense(self.w_vocab.size, use_bias=True, trainable=True)
 
     with tf.name_scope('Training'):
       if config.attention_type:
         assert attention_states is not None
         num_units = shape(attention_states, -1)
-        attention = tf.contrib.seq2seq.LuongAttention(
+        # tf.contrib.seq2seq.LuongAttention
+        attention = getattr(tf.contrib.seq2seq, config.attention_type)(
           num_units, attention_states,
-          memory_sequence_length=encoder_input_length)
+          memory_sequence_length=encoder_input_lengths)
         train_decoder_cell = tf.contrib.seq2seq.AttentionWrapper(
           decoder_cell, attention)
         decoder_initial_state = train_decoder_cell.zero_state(batch_size, tf.float32).clone(cell_state=train_decoder_state)
@@ -212,12 +213,12 @@ class AutoEncoder(ModelBase):
       beam_width = config.beam_width
       if config.attention_type:
         num_units = shape(attention_states, -1)
-        attention = tf.contrib.seq2seq.LuongAttention(
+        attention = getattr(tf.contrib.seq2seq, config.attention_type)(
           num_units, 
           tf.contrib.seq2seq.tile_batch(
             attention_states, multiplier=beam_width),
           memory_sequence_length=tf.contrib.seq2seq.tile_batch(
-            encoder_input_length, multiplier=beam_width))
+            encoder_input_lengths, multiplier=beam_width))
         test_decoder_cell = tf.contrib.seq2seq.AttentionWrapper(
           decoder_cell, attention)
         decoder_initial_state = test_decoder_cell.zero_state(batch_size*beam_width, tf.float32).clone(cell_state=tf.contrib.seq2seq.tile_batch(test_decoder_state, multiplier=beam_width))
@@ -254,6 +255,7 @@ class AutoEncoder(ModelBase):
       self.is_training: is_training,
       #self.speaker_changes_ph: np.array(batch.speaker_changes)
     }
+    assert not np.any(np.isnan(batch.texts))
     feed_dict[self.e_inputs_w_ph] = np.array(batch.texts)
 
     #if self.c_vocab:
@@ -263,6 +265,8 @@ class AutoEncoder(ModelBase):
 
   @timewatch()
   def train(self, data, do_update=True):
+    self.debug = [self.uttr_lengths, self.decoder_inputs, self.targets, self.target_length, self.target_weights]
+
     '''
     This method can be used for the calculation of valid loss with do_update=False
     '''
@@ -287,11 +291,19 @@ class AutoEncoder(ModelBase):
       print 'res', res
       sys.stdout.flush()
       if math.isnan(step_loss):
-        sys.stderr.write('Got a Nan loss.\n')
-        #for x in feed_dict:
-        #  print x
-        #  print feed_dict[x]
-        #exit(1)
+        sys.stderr.write('Got Nan loss.\n')
+        for x in feed_dict:
+          print x
+          print feed_dict[x]
+        # for t in feed_dict[self.e_inputs_w_ph]:
+        #   print '--------------'
+        #   print t
+        #   print self.w_vocab.id2sent(t)
+        print set([np.count_nonzero(x) for x in feed_dict[self.e_inputs_w_ph]])
+        exit(1)
+      else:
+        print set([np.count_nonzero(x) for x in feed_dict[self.e_inputs_w_ph]])
+
       epoch_time += time.time() - t
       loss += step_loss
       num_steps += 1

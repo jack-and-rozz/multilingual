@@ -148,16 +148,14 @@ class _DailyDialogDataset(DatasetBase):
     w_contexts = self.symbolized.w_contexts 
     c_contexts = self.symbolized.c_contexts if self.cbase else [None for _ in xrange(len(w_contexts))]
     speaker_changes = self.speaker_changes
-    data = [tuple(x) for x in zip(w_contexts, c_contexts, responses, speaker_changes, self.original.w_contexts, self.original.responses)]
+    data = common.flatten(w_contexts) + list(responses)
+    #data = [tuple(x) for x in zip(w_contexts, c_contexts, responses, speaker_changes, self.original.w_contexts, self.original.responses)]
     if shuffle: # For training.
       random.shuffle(data)
     for i, b in itertools.groupby(enumerate(data), 
                                   lambda x: x[0] // (batch_size)):
       batch = [x[1] for x in b]
-      w_contexts, c_contexts, responses, speaker_changes, ori_w_contexts, ori_responses = zip(*batch)
-
-
-      texts = common.flatten(w_contexts) + list(responses)
+      texts = batch
       _utterance_max_len = max([len(u) for u in texts]) 
       if not utterance_max_len or _utterance_max_len < utterance_max_len:
         utterance_max_len = _utterance_max_len
