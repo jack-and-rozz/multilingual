@@ -72,8 +72,6 @@ class AutoEncoder(ModelBase):
     #self.d_outputs_ph = tf.placeholder(
     #  tf.int32, [None, None], name="DecoderOutput")
     self.d_outputs_ph = self.e_inputs_w_ph
-    self.speaker_changes_ph = tf.placeholder(
-      tf.int32, [None, None], name="SpeakerChanges")
 
     self.is_training = tf.placeholder(tf.bool, [], name='is_training')
     with tf.name_scope('keep_prob'):
@@ -133,10 +131,7 @@ class AutoEncoder(ModelBase):
         'Char', [c_vocab.size, config.c_embedding_size],
         initializer=initializer,
         trainable=trainable)
-    self.sc_embeddings = self.initialize_embeddings(
-      'SpeakerChange', [BooleanVocab.size, config.feature_size],
-      trainable=trainable)
-    
+
   def setup_word_encoder(self, config, scope=None):
     word_repls = []
     with tf.variable_scope('Word') as scope:
@@ -313,7 +308,6 @@ class AutoEncoder(ModelBase):
   def test(self, data):
     inputs = []
     outputs = []
-    speaker_changes = []
     predictions = []
     num_steps = 0
     epoch_time = 0.0
