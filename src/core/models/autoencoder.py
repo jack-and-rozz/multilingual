@@ -303,7 +303,6 @@ class AutoEncoder(ModelBase):
         exit(1)
       else:
         print set([np.count_nonzero(x) for x in feed_dict[self.e_inputs_w_ph]])
-
       epoch_time += time.time() - t
       loss += step_loss
       num_steps += 1
