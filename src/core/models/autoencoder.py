@@ -180,22 +180,8 @@ class AutoEncoder(ModelBase):
         projection_layer = tf.layers.Dense(self.w_vocab.size, use_bias=True, trainable=True)
 
     with tf.name_scope('Training'):
-      if config.attention_type:
-        assert attention_states is not None
-        num_units = shape(attention_states, -1)
-        # tf.contrib.seq2seq.LuongAttention
-        attention = getattr(tf.contrib.seq2seq, config.attention_type)(
-          num_units, attention_states,
-          memory_sequence_length=encoder_input_lengths)
-        train_decoder_cell = tf.contrib.seq2seq.AttentionWrapper(
-          decoder_cell, attention)
-        decoder_initial_state = train_decoder_cell.zero_state(batch_size, tf.float32).clone(cell_state=train_decoder_state)
-      else:
-        train_decoder_cell = decoder_cell
-        decoder_initial_state = train_decoder_state
-
-      # encoder_state can't be directly copied into decoder_cell when using the attention mechanisms, initial_state must be an instance of AttentionWrapperState. (https://github.com/tensorflow/nmt/issues/205)
-
+      train_decoder_cell = decoder_cell
+      decoder_initial_state = train_decoder_state
       helper = tf.contrib.seq2seq.TrainingHelper(
         decoder_inputs_emb, sequence_length=self.target_length, time_major=False)
 
@@ -211,21 +197,9 @@ class AutoEncoder(ModelBase):
 
     with tf.name_scope('Test'):
       beam_width = config.beam_width
-      if config.attention_type:
-        num_units = shape(attention_states, -1)
-        attention = getattr(tf.contrib.seq2seq, config.attention_type)(
-          num_units, 
-          tf.contrib.seq2seq.tile_batch(
-            attention_states, multiplier=beam_width),
-          memory_sequence_length=tf.contrib.seq2seq.tile_batch(
-            encoder_input_lengths, multiplier=beam_width))
-        test_decoder_cell = tf.contrib.seq2seq.AttentionWrapper(
-          decoder_cell, attention)
-        decoder_initial_state = test_decoder_cell.zero_state(batch_size*beam_width, tf.float32).clone(cell_state=tf.contrib.seq2seq.tile_batch(test_decoder_state, multiplier=beam_width))
-      else:
-        test_decoder_cell = decoder_cell
-        decoder_initial_state = tf.contrib.seq2seq.tile_batch(
-          test_decoder_state, multiplier=beam_width)
+      test_decoder_cell = decoder_cell
+      decoder_initial_state = tf.contrib.seq2seq.tile_batch(
+        test_decoder_state, multiplier=beam_width)
 
       decoder = tf.contrib.seq2seq.BeamSearchDecoder(
         test_decoder_cell, self.w_embeddings, self.start_tokens, self.end_token, 
@@ -236,6 +210,9 @@ class AutoEncoder(ModelBase):
         decoder, impute_finished=False,
         maximum_iterations=config.utterance_max_len, scope=scope)
       predictions = test_decoder_outputs.predicted_ids
+      #self.beam_scores = test_decoder_outputs.beam_search_decoder_output.scores
+      # memo: 出力結果はbeam_scoresの低い順にならんでいて (負の値を取る)，概ねそれはちゃんと正確さと一致してそう？
+
     return logits, predictions
 
   def get_loss(self, config):
@@ -301,8 +278,7 @@ class AutoEncoder(ModelBase):
         #   print self.w_vocab.id2sent(t)
         print set([np.count_nonzero(x) for x in feed_dict[self.e_inputs_w_ph]])
         exit(1)
-      else:
-        print set([np.count_nonzero(x) for x in feed_dict[self.e_inputs_w_ph]])
+
       epoch_time += time.time() - t
       loss += step_loss
       num_steps += 1
@@ -328,8 +304,17 @@ class AutoEncoder(ModelBase):
       #    print x
       #    print resx.shape
       # exit(1)
+
       t = time.time()
       batch_predictions = self.sess.run(self.predictions, feed_dict)
+      batch_predictions = np.transpose(batch_predictions, (0, 2, 1)) 
+      #batch_predictions = [list(zip(*p)) for p in batch_predictions]
+      self.debug = [self.beam_scores]
+      bs = self.sess.run(self.beam_scores, feed_dict)
+      print bs
+      print batch_predictions
+
+      r = feed_dict[self.e_inputs_w_ph][0]
       epoch_time += time.time() - t
       num_steps += 1
       inputs.append(batch.texts)
@@ -341,6 +326,9 @@ class AutoEncoder(ModelBase):
     outputs = inputs
     #outputs = [self.w_vocab.id2sent(r, join=True) for r in outputs]
     # [batch_size, utterance_max_len, beam_width] - > [batch_size, beam_width, utterance_max_len]
-    predictions = [[self.w_vocab.id2sent(r, join=True) for r in zip(*p)] for p in predictions]
+    #predictions = [[self.w_vocab.id2sent(r, join=True) for r in zip(*p)] for p in predictions]
+    predictions = [[self.w_vocab.id2sent(r, join=True) for r in p] for p in predictions]
     return (inputs, outputs, predictions), epoch_time
 
+
+#FinalBeamDecoderOutput(predicted_ids=<tf.Tensor 'Decoder/Test/projection/transpose:0' shape=(?, ?, 5) dtype=int32>, beam_search_decoder_output=BeamSearchDecoderOutput(scores=<tf.Tensor 'Decoder/Test/projection/transpose_1:0' shape=(?, ?, 5) dtype=float32>, predicted_ids=<tf.Tensor 'Decoder/Test/projection/transpose_2:0' shape=(?, ?, 5) dtype=int32>, parent_ids=<tf.Tensor 'Decoder/Test/projection/transpose_3:0' shape=(?, ?, 5) dtype=int32>))

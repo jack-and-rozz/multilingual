@@ -86,7 +86,7 @@ class _DailyDialogDataset(DatasetBase):
   def size(self):
     if not self.load:
       return None
-    return len(self.original.responses)
+    return len(self.texts)
 
   @property
   def oov_rate(self):
@@ -138,30 +138,30 @@ class _DailyDialogDataset(DatasetBase):
     self.original.responses = [self.w_vocab.tokenizer(r) for r in responses]
     self.symbolized.responses = [self.w_vocab.sent2id(r) for r in responses]
 
+    responses = self.symbolized.responses
+    w_contexts = self.symbolized.w_contexts 
+    self.texts = common.flatten(w_contexts) + list(responses)
+
   def get_batch(self, batch_size, word_max_len=0,
                 utterance_max_len=0, shuffle=False):
     if not self.load:
       self.load_data() # lazy loading.
 
-    
-    responses = self.symbolized.responses
-    w_contexts = self.symbolized.w_contexts 
-    c_contexts = self.symbolized.c_contexts if self.cbase else [None for _ in xrange(len(w_contexts))]
-    speaker_changes = self.speaker_changes
-    data = common.flatten(w_contexts) + list(responses)
-    #data = [tuple(x) for x in zip(w_contexts, c_contexts, responses, speaker_changes, self.original.w_contexts, self.original.responses)]
+    data = self.texts
     if shuffle: # For training.
       random.shuffle(data)
     for i, b in itertools.groupby(enumerate(data), 
-                                  lambda x: x[0] // (batch_size)):
+                                  lambda x: x[0] // batch_size):
       batch = [x[1] for x in b]
       texts = batch
-      _utterance_max_len = max([len(u) for u in texts]) 
-      if not utterance_max_len or _utterance_max_len < utterance_max_len:
-        utterance_max_len = _utterance_max_len
+      _utterance_max_len_data = max([len(u) for u in texts]) 
+      if not utterance_max_len or _utterance_max_len_data < utterance_max_len:
+        _utterance_max_len = _utterance_max_len_data
+      else:
+        _utterance_max_len = utterance_max_len
       texts = np.array(texts)
       texts = tf.keras.preprocessing.sequence.pad_sequences(
-        texts, maxlen=utterance_max_len, 
+        texts, maxlen=_utterance_max_len, 
         padding='post', truncating='post', value=PAD_ID)
       yield common.dotDict({
         'texts': texts

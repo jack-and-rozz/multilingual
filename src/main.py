@@ -162,13 +162,15 @@ class Manager(object):
       print df
       sys.stdout = sys.__stdout__
   def debug(self):
-    self.stat()
+    self.dataset.train.load_data()
+    print self.dataset.train.size
     config = self.config
     dataset = self.dataset.test
     batches = dataset.get_batch(
       config.batch_size, utterance_max_len=0, shuffle=False)
     dataset.load_data()
-    for b in batches:
+    for i, b in enumerate(batches):
+      print i, 
       for t in b.texts:
         print self.w_vocab.id2sent(t)
     #   for j, (ori_w_context, ori_response, w_context, c_context, response, speaker_change) in enumerate(zip(b.ori_w_contexts, b.ori_responses, b.w_contexts, b.c_contexts, b.responses, b.speaker_changes)):
@@ -219,17 +221,15 @@ class Manager(object):
     test_filename = '%s.%02d' % (test_filename, model.epoch.eval()) if in_training else '%s.best' % (test_filename)
     test_output_path = os.path.join(self.tests_path, test_filename)
 
-    def switch_speaker(prev_speaker):
-      return 0 if prev_speaker else 1
     with open(test_output_path, 'w') as f:
       sys.stdout = f
       for i, dialogue in enumerate(zip(*res)):
         inp, out, prediction = dialogue
-        print '<%d-I>:\t%s' % (i, inp)
+        print '<%d-I> : %s' % (i, inp)
         #print '<%d-R> :(speaker%d)\t%s' % (i, speaker, response)
         for j, p in enumerate(prediction):
           p = p.encode('utf-8')
-          print '<%d-P%d>:\t%s' % (i, j, p)
+          print '<%d-P%d>: %s' % (i, j, p)
         print ''
       sys.stdout = sys.__stdout__
     #if in_training:

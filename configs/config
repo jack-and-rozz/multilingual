@@ -16,7 +16,7 @@ num_layers=1                       # The number of layers in MultiRNNCell.
 hidden_size=300                    # The dimension of RNN, and other layers.
 #rnn_type=bidirectional_dynamic_rnn # The name of rnn function in tensorflow.
 cell_type=GRUCell                  # The name of RNNCell class in tensorflow.
-attention_type="LuongAttention"
+attention_type=""
 encoder{
   utterance = {
     encoder_type=BidirectionalRNNEncoder
