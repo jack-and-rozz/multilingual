@@ -5,7 +5,7 @@ from pprint import pprint
 
 import tensorflow as tf
 import tensorflow.contrib.distributions as tfd
-from utils.tf_utils import shape, linear, make_summary
+from utils.tf_utils import shape, linear, make_summary, SharedKernelDense
 from utils.common import flatten, timewatch
 from core.models.base import ModelBase, setup_cell
 from core.models.encoder import CharEncoder, WordEncoder, RNNEncoder, CNNEncoder
@@ -119,17 +119,6 @@ class AutoEncoder(ModelBase):
       initializer=initializer,
       trainable=trainable)
 
-    if c_vocab is not None:
-      if c_vocab.embeddings:
-        initializer = tf.constant_initializer(c_vocab.embeddings) 
-        trainable = config.train_embedding
-      else:
-        initializer = None
-        trainable = True 
-      self.c_embeddings = self.initialize_embeddings(
-        'Char', [c_vocab.size, config.c_embedding_size],
-        initializer=initializer,
-        trainable=trainable)
 
   def setup_word_encoder(self, config, scope=None):
     word_repls = []
@@ -138,11 +127,11 @@ class AutoEncoder(ModelBase):
       word_encoder = WordEncoder(self.keep_prob, shared_scope=scope)
       word_repls.append(word_encoder.encode(w_inputs))
 
-    with tf.variable_scope('Char') as scope:
-      if self.c_vocab:
-        c_inputs = tf.nn.embedding_lookup(self.c_embeddings, self.e_inputs_c_ph)
-        char_encoder = CNNEncoder(self.keep_prob, shared_scope=scope)
-        word_repls.append(char_encoder.encode(c_inputs))
+    # with tf.variable_scope('Char') as scope:
+    #   if self.c_vocab:
+    #     c_inputs = tf.nn.embedding_lookup(self.c_embeddings, self.e_inputs_c_ph)
+    #     char_encoder = CNNEncoder(self.keep_prob, shared_scope=scope)
+    #     word_repls.append(char_encoder.encode(c_inputs))
     word_repls = tf.concat(word_repls, axis=-1) # [batch_size, context_len, utterance_len, word_emb_size + cnn_output_size]
     return word_repls
 
@@ -176,8 +165,12 @@ class AutoEncoder(ModelBase):
                               keep_prob=self.keep_prob)
     if projection_layer is None:
       with tf.variable_scope('projection') as scope:
-        #projection_layer = tf.layers.Dense(config.w_vocab_size, use_bias=True, trainable=True)
-        projection_layer = tf.layers.Dense(self.w_vocab.size, use_bias=True, trainable=True)
+        #projection_layer = tf.layers.Dense(self.w_vocab.size, use_bias=True, trainable=True)
+        kernel = tf.transpose(self.w_embeddings, perm=[1,0])
+        print 'kernel', kernel
+        projection_layer = SharedKernelDense(shape(self.w_embeddings, 0), 
+                                             use_bias=False, trainable=False,
+                                             shared_kernel=kernel)
 
     with tf.name_scope('Training'):
       train_decoder_cell = decoder_cell
@@ -308,12 +301,6 @@ class AutoEncoder(ModelBase):
       t = time.time()
       batch_predictions = self.sess.run(self.predictions, feed_dict)
       batch_predictions = np.transpose(batch_predictions, (0, 2, 1)) 
-      #batch_predictions = [list(zip(*p)) for p in batch_predictions]
-      self.debug = [self.beam_scores]
-      bs = self.sess.run(self.beam_scores, feed_dict)
-      print bs
-      print batch_predictions
-
       r = feed_dict[self.e_inputs_w_ph][0]
       epoch_time += time.time() - t
       num_steps += 1

@@ -14,42 +14,6 @@ from core.models import encoder
 from core.extensions.pointer import pointer_decoder 
 from core.vocabularies import BOS_ID, PAD_ID, BooleanVocab
 
-# class SharedDenseLayer(tf.layers.Dense):
-#   def __init__(self, *args, **kwargs):
-#     super(SharedDenseLayer, self).__init__(*args, **kwargs)
-#     self.kernel = None
-
-#   def add_kernel(self, tensor):
-#     assert shape(tensor, 0) == self.units
-#     self.kernel = tensor 
-
-#   def build(self, input_shape):
-#     input_shape = tensor_shape.TensorShape(input_shape)
-#     if input_shape[-1].value is None:
-#       raise ValueError('The last dimension of the inputs to `Dense` '
-#                        'should be defined. Found `None`.')
-#     self.input_spec = base.InputSpec(min_ndim=2,
-#                                      axes={-1: input_shape[-1].value})
-#     if not self.kernel:
-#       self.kernel = self.add_variable('kernel',
-#                                       shape=[input_shape[-1].value, self.units],
-#                                       initializer=self.kernel_initializer,
-#                                       regularizer=self.kernel_regularizer,
-#                                       constraint=self.kernel_constraint,
-#                                       dtype=self.dtype,
-#                                       trainable=True)
-#     if self.use_bias:
-#       self.bias = self.add_variable('bias',
-#                                     shape=[self.units,],
-#                                     initializer=self.bias_initializer,
-#                                     regularizer=self.bias_regularizer,
-#                                     constraint=self.bias_constraint,
-#                                     dtype=self.dtype,
-#                                     trainable=True)
-#     else:
-#       self.bias = None
-#     self.built = True
-
 class HierarchicalSeq2Seq(ModelBase):
   def __init__(self, sess, config, w_vocab, c_vocab):
     ModelBase.__init__(self, sess, config)

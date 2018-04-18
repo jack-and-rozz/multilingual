@@ -185,3 +185,39 @@ def _linear(args,
     return nn_ops.bias_add(res, biases)
 
 
+from tensorflow.python.framework import tensor_shape
+from tensorflow.python.layers import base
+class SharedKernelDense(tf.layers.Dense):
+  def __init__(self, units, shared_kernel=None, **kwargs):
+    super(SharedKernelDense, self).__init__(units, **kwargs)
+    self.kernel = None
+    self.shared_kernel = shared_kernel
+
+  def build(self, input_shape):
+    input_shape = tensor_shape.TensorShape(input_shape)
+    if input_shape[-1].value is None:
+      raise ValueError('The last dimension of the inputs to `Dense` '
+                       'should be defined. Found `None`.')
+    self.input_spec = base.InputSpec(min_ndim=2,
+                                     axes={-1: input_shape[-1].value})
+    if self.shared_kernel is None:
+      self.kernel = self.add_variable('kernel',
+                                      shape=[input_shape[-1].value, self.units],
+                                      initializer=self.kernel_initializer,
+                                      regularizer=self.kernel_regularizer,
+                                      constraint=self.kernel_constraint,
+                                      dtype=self.dtype,
+                                      trainable=True)
+    else:
+      self.kernel = self.shared_kernel
+    if self.use_bias:
+      self.bias = self.add_variable('bias',
+                                    shape=[self.units,],
+                                    initializer=self.bias_initializer,
+                                    regularizer=self.bias_regularizer,
+                                    constraint=self.bias_constraint,
+                                    dtype=self.dtype,
+                                    trainable=True)
+    else:
+      self.bias = None
+    self.built = True

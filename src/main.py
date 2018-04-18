@@ -225,7 +225,7 @@ class Manager(object):
       sys.stdout = f
       for i, dialogue in enumerate(zip(*res)):
         inp, out, prediction = dialogue
-        print '<%d-I> : %s' % (i, inp)
+        print '<%d-I> : %s' % (i, inp.encode('utf-8'))
         #print '<%d-R> :(speaker%d)\t%s' % (i, speaker, response)
         for j, p in enumerate(prediction):
           p = p.encode('utf-8')
