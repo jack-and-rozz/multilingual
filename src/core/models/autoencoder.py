@@ -120,10 +120,21 @@ class AutoEncoder(ModelBase):
     special_tokens_emb = self.initialize_embeddings(
       'SpecialTokens', vocab.e_word.embeddings[:n_start_vocab].shape,
       initializer=tf.constant_initializer(vocab.e_word.embeddings[:n_start_vocab]), trainable=True)
-    e_words_emb = tf.constant(vocab.e_word.embeddings[n_start_vocab:],
-                              dtype=tf.float32)
-    j_words_emb = tf.constant(vocab.j_word.embeddings[n_start_vocab:], 
-                              dtype=tf.float32)
+    # e_words_emb = tf.constant(vocab.e_word.embeddings[n_start_vocab:],
+    #                           dtype=tf.float32)
+    # j_words_emb = tf.constant(vocab.j_word.embeddings[n_start_vocab:], 
+    #                           dtype=tf.float32)
+    e_words_emb = self.initialize_embeddings(
+      'EnWords', vocab.e_word.embeddings[n_start_vocab:].shape,
+      initializer=tf.constant_initializer(vocab.e_word.embeddings[n_start_vocab:]),
+      trainable=config.train_embedding
+    )
+    j_words_emb = self.initialize_embeddings(
+      'JPWords', vocab.j_word.embeddings[n_start_vocab:].shape,
+      initializer=tf.constant_initializer(vocab.j_word.embeddings[n_start_vocab:]),
+      trainable=config.train_embedding
+    )
+
     self.embeddings.e_word = tf.concat([special_tokens_emb, e_words_emb], axis=0)
     self.embeddings.j_word = tf.concat([special_tokens_emb, j_words_emb], axis=0)
 

@@ -47,7 +47,6 @@ class Manager(object):
         lowercase=self.config.lowercase,
         normalize_digits=self.config.normalize_digits,
         skip_first=emb_conf.ja.skip_first)
-
       self.c_vocab = None
     #self.w_vocab, self.c_vocab = data_class.create_vocab_from_data(self.config)
     self.dataset = data_class(self.config.dataset_info, 
