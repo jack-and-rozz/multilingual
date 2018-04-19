@@ -6,7 +6,7 @@ from pprint import pprint
 import tensorflow as tf
 import tensorflow.contrib.distributions as tfd
 from utils.tf_utils import shape, linear, make_summary, SharedKernelDense
-from utils.common import flatten, timewatch
+from utils.common import flatten, timewatch, dotDict
 from core.models.base import ModelBase, setup_cell
 from core.models.encoder import CharEncoder, WordEncoder, RNNEncoder, CNNEncoder
 from core.models import encoder
@@ -15,18 +15,16 @@ from core.vocabularies import BOS_ID, PAD_ID, BooleanVocab
 
 
 class AutoEncoder(ModelBase):
-  def __init__(self, sess, config, w_vocab, c_vocab):
+  def __init__(self, sess, config, vocab):
     ModelBase.__init__(self, sess, config)
-    self.w_vocab = w_vocab
-    self.c_vocab = c_vocab
+    self.vocab = vocab
     with tf.name_scope('Placeholders'):
       self.setup_placeholder(config)
 
     with tf.variable_scope('Embeddings'):
-      self.setup_embeddings(config, w_vocab, c_vocab)
+      self.setup_embeddings(config, vocab)
 
     with tf.variable_scope('Encoder', reuse=tf.AUTO_REUSE):
-      assert self.w_vocab or self.c_vocab
       word_repls = self.setup_word_encoder(config)
 
       with tf.variable_scope('Utterance') as scope:
@@ -40,14 +38,23 @@ class AutoEncoder(ModelBase):
     with tf.variable_scope('Projection') as scope:
       projection_layer = self.setup_projection(config, scope=scope)
     ## Decoder
-    with tf.variable_scope('Decoder') as scope:
-      self.logits, self.predictions = self.setup_decoder(
+    with tf.variable_scope('Decoder', reuse=tf.AUTO_REUSE) as scope:
+      self.logits, self.e_predictions = self.setup_decoder(
         config, train_decoder_state, test_decode_state,
+        self.embeddings.e_word,
         attention_states=attention_states, 
         encoder_input_lengths=self.uttr_lengths, 
         projection_layer=projection_layer,
         scope=scope)
-      
+
+      _, self.j_predictions = self.setup_decoder(
+        config, train_decoder_state, test_decode_state,
+        self.embeddings.j_word,
+        attention_states=attention_states, 
+        encoder_input_lengths=self.uttr_lengths, 
+        projection_layer=projection_layer,
+        scope=scope)
+
     with tf.name_scope('Loss'):
       self.loss = self.get_loss(config)
 
@@ -107,32 +114,26 @@ class AutoEncoder(ModelBase):
     with tf.name_scope('targets'):
       self.targets = tf.concat([self.d_outputs_ph, tf.expand_dims(end_tokens, 1)], axis=1)[:, :shape(self.target_weights, 1)]
 
-  def setup_embeddings(self, config, w_vocab, c_vocab):
-    if w_vocab.embeddings is not None:
-      initializer = tf.constant_initializer(w_vocab.embeddings) 
-      trainable = config.train_embedding
-    else:
-      initializer = None
-      trainable = True 
-    self.w_embeddings = self.initialize_embeddings(
-      'Word', [w_vocab.size, config.w_embedding_size],
-      initializer=initializer,
-      trainable=trainable)
-
+  def setup_embeddings(self, config, vocab):
+    self.embeddings = dotDict()
+    n_start_vocab = len(vocab.e_word.start_vocab)
+    special_tokens_emb = self.initialize_embeddings(
+      'SpecialTokens', vocab.e_word.embeddings[:n_start_vocab].shape,
+      initializer=tf.constant_initializer(vocab.e_word.embeddings[:n_start_vocab]), trainable=True)
+    e_words_emb = tf.constant(vocab.e_word.embeddings[n_start_vocab:],
+                              dtype=tf.float32)
+    j_words_emb = tf.constant(vocab.j_word.embeddings[n_start_vocab:], 
+                              dtype=tf.float32)
+    self.embeddings.e_word = tf.concat([special_tokens_emb, e_words_emb], axis=0)
+    self.embeddings.j_word = tf.concat([special_tokens_emb, j_words_emb], axis=0)
 
   def setup_word_encoder(self, config, scope=None):
     word_repls = []
     with tf.variable_scope('Word') as scope:
-      w_inputs = tf.nn.embedding_lookup(self.w_embeddings, self.e_inputs_w_ph)
+      w_inputs = tf.nn.embedding_lookup(self.embeddings.e_word, self.e_inputs_w_ph)
       word_encoder = WordEncoder(self.keep_prob, shared_scope=scope)
       word_repls.append(word_encoder.encode(w_inputs))
-
-    # with tf.variable_scope('Char') as scope:
-    #   if self.c_vocab:
-    #     c_inputs = tf.nn.embedding_lookup(self.c_embeddings, self.e_inputs_c_ph)
-    #     char_encoder = CNNEncoder(self.keep_prob, shared_scope=scope)
-    #     word_repls.append(char_encoder.encode(c_inputs))
-    word_repls = tf.concat(word_repls, axis=-1) # [batch_size, context_len, utterance_len, word_emb_size + cnn_output_size]
+    word_repls = tf.concat(word_repls, axis=-1) 
     return word_repls
 
   def setup_uttr_encoder(self, config, word_repls, scope=None):
@@ -152,12 +153,13 @@ class AutoEncoder(ModelBase):
     return None
 
   def setup_decoder(self, config, train_decoder_state, test_decoder_state,
+                    embeddings,
                     encoder_input_lengths=None,
                     attention_states=None, 
                     projection_layer=None,
                     scope=None):
     batch_size = self.batch_size
-    decoder_inputs_emb = tf.nn.embedding_lookup(self.w_embeddings, self.decoder_inputs)
+    decoder_inputs_emb = tf.nn.embedding_lookup(embeddings, self.decoder_inputs)
     # TODO: 多言語対応にする時はbias, trainableをfalseにしてembeddingをconstantにしたい
     decoder_cell = setup_cell(config.decoder.cell_type, 
                               shape(train_decoder_state, -1), 
@@ -165,10 +167,8 @@ class AutoEncoder(ModelBase):
                               keep_prob=self.keep_prob)
     if projection_layer is None:
       with tf.variable_scope('projection') as scope:
-        #projection_layer = tf.layers.Dense(self.w_vocab.size, use_bias=True, trainable=True)
-        kernel = tf.transpose(self.w_embeddings, perm=[1,0])
-        print 'kernel', kernel
-        projection_layer = SharedKernelDense(shape(self.w_embeddings, 0), 
+        kernel = tf.transpose(embeddings, perm=[1, 0])
+        projection_layer = SharedKernelDense(shape(embeddings, 0), 
                                              use_bias=False, trainable=False,
                                              shared_kernel=kernel)
 
@@ -195,7 +195,7 @@ class AutoEncoder(ModelBase):
         test_decoder_state, multiplier=beam_width)
 
       decoder = tf.contrib.seq2seq.BeamSearchDecoder(
-        test_decoder_cell, self.w_embeddings, self.start_tokens, self.end_token, 
+        test_decoder_cell, embeddings, self.start_tokens, self.end_token, 
         decoder_initial_state,
         beam_width, output_layer=projection_layer,
         length_penalty_weight=config.length_penalty_weight)
@@ -265,10 +265,6 @@ class AutoEncoder(ModelBase):
         for x in feed_dict:
           print x
           print feed_dict[x]
-        # for t in feed_dict[self.e_inputs_w_ph]:
-        #   print '--------------'
-        #   print t
-        #   print self.w_vocab.id2sent(t)
         print set([np.count_nonzero(x) for x in feed_dict[self.e_inputs_w_ph]])
         exit(1)
 
@@ -288,7 +284,8 @@ class AutoEncoder(ModelBase):
   def test(self, data):
     inputs = []
     outputs = []
-    predictions = []
+    e_predictions = []
+    j_predictions = []
     num_steps = 0
     epoch_time = 0.0
     for i, batch in enumerate(data):
@@ -299,23 +296,25 @@ class AutoEncoder(ModelBase):
       # exit(1)
 
       t = time.time()
-      batch_predictions = self.sess.run(self.predictions, feed_dict)
+      inputs.append(batch.texts)
+      batch_predictions = self.sess.run(self.e_predictions, feed_dict)
       batch_predictions = np.transpose(batch_predictions, (0, 2, 1)) 
-      r = feed_dict[self.e_inputs_w_ph][0]
+      e_predictions.append(batch_predictions)
+      batch_predictions = self.sess.run(self.j_predictions, feed_dict)
+      batch_predictions = np.transpose(batch_predictions, (0, 2, 1)) 
+      j_predictions.append(batch_predictions)
+
+
       epoch_time += time.time() - t
       num_steps += 1
-      inputs.append(batch.texts)
-      predictions.append(batch_predictions)
     inputs = flatten(inputs)
-    outputs = flatten(outputs)
-    predictions = flatten(predictions)
-    inputs = [self.w_vocab.id2sent(u, join=True) for u in inputs]
+    e_predictions = flatten(e_predictions)
+    j_predictions = flatten(j_predictions)
+    inputs = [self.vocab.e_word.id2sent(u, join=True) for u in inputs]
     outputs = inputs
-    #outputs = [self.w_vocab.id2sent(r, join=True) for r in outputs]
-    # [batch_size, utterance_max_len, beam_width] - > [batch_size, beam_width, utterance_max_len]
-    #predictions = [[self.w_vocab.id2sent(r, join=True) for r in zip(*p)] for p in predictions]
-    predictions = [[self.w_vocab.id2sent(r, join=True) for r in p] for p in predictions]
-    return (inputs, outputs, predictions), epoch_time
+    e_predictions = [[self.vocab.e_word.id2sent(r, join=True) for r in p] for p in e_predictions]
+    j_predictions = [[self.vocab.j_word.id2sent(r, join=True) for r in p] for p in j_predictions]
+    return (inputs, outputs, e_predictions, j_predictions), epoch_time
 
 
 #FinalBeamDecoderOutput(predicted_ids=<tf.Tensor 'Decoder/Test/projection/transpose:0' shape=(?, ?, 5) dtype=int32>, beam_search_decoder_output=BeamSearchDecoderOutput(scores=<tf.Tensor 'Decoder/Test/projection/transpose_1:0' shape=(?, ?, 5) dtype=float32>, predicted_ids=<tf.Tensor 'Decoder/Test/projection/transpose_2:0' shape=(?, ?, 5) dtype=int32>, parent_ids=<tf.Tensor 'Decoder/Test/projection/transpose_3:0' shape=(?, ?, 5) dtype=int32>))

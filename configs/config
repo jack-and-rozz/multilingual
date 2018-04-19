@@ -76,9 +76,20 @@ feature_size = 10
 
 #Pretrained embeddings.
 embedding_path=dataset/embeddings   # The directory where to put your pretrained embeddings file.
-embeddings=${fasttext_300d_en}
+embeddings={
+  en=${fasttext_300d_en_mapped}
+  ja=${fasttext_300d_ja_mapped}
+}
 fasttext_300d_en{
   path = ${embedding_path}/fasttext/wiki.en.vec
+  skip_first=true
+}
+fasttext_300d_en_mapped{
+  path = ${embedding_path}/fasttext/wiki.en.vec.mapped.50000
+  skip_first=true
+}
+fasttext_300d_ja_mapped{
+  path = ${embedding_path}/fasttext/wiki.ja.vec.mapped.50000
   skip_first=true
 }
 glove_300d_filtered_en {

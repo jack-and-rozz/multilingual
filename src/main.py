@@ -32,18 +32,26 @@ class Manager(object):
     sys.stderr.write(str(self.config) + '\n')
 
     data_class = getattr(datasets, self.config.dataset_type)
+    self.vocab = common.dotDict()
     if self.config.embeddings:
       emb_conf = self.config.embeddings
-      self.w_vocab = vocabularies.WordVocabularyWithEmbedding(
-        emb_conf.path, 
+      self.vocab.e_word = vocabularies.WordVocabularyWithEmbedding(
+        emb_conf.en.path, 
         vocab_size=self.config.w_vocab_size,
         lowercase=self.config.lowercase,
         normalize_digits=self.config.normalize_digits,
-        skip_first=emb_conf.skip_first)
+        skip_first=emb_conf.en.skip_first)
+      self.vocab.j_word = vocabularies.WordVocabularyWithEmbedding(
+        emb_conf.ja.path, 
+        vocab_size=self.config.w_vocab_size,
+        lowercase=self.config.lowercase,
+        normalize_digits=self.config.normalize_digits,
+        skip_first=emb_conf.ja.skip_first)
+
       self.c_vocab = None
     #self.w_vocab, self.c_vocab = data_class.create_vocab_from_data(self.config)
     self.dataset = data_class(self.config.dataset_info, 
-                              self.w_vocab, self.c_vocab)
+                              self.vocab.e_word, self.c_vocab)
 
   def load_config(self, args):
     self.model_path = args.checkpoint_path
@@ -172,7 +180,7 @@ class Manager(object):
     for i, b in enumerate(batches):
       print i, 
       for t in b.texts:
-        print self.w_vocab.id2sent(t)
+        print self.vocab.e_word.id2sent(t)
     #   for j, (ori_w_context, ori_response, w_context, c_context, response, speaker_change) in enumerate(zip(b.ori_w_contexts, b.ori_responses, b.w_contexts, b.c_contexts, b.responses, b.speaker_changes)):
     #     print '<%d>' % cnt
     #     print 'contexts(origin):', ori_w_context
@@ -224,12 +232,15 @@ class Manager(object):
     with open(test_output_path, 'w') as f:
       sys.stdout = f
       for i, dialogue in enumerate(zip(*res)):
-        inp, out, prediction = dialogue
+        inp, out, e_prediction, j_prediction = dialogue
         print '<%d-I> : %s' % (i, inp.encode('utf-8'))
         #print '<%d-R> :(speaker%d)\t%s' % (i, speaker, response)
-        for j, p in enumerate(prediction):
+        for j, p in enumerate(e_prediction):
           p = p.encode('utf-8')
-          print '<%d-P%d>: %s' % (i, j, p)
+          print '<%d-E-P%d>: %s' % (i, j, p)
+        for j, p in enumerate(j_prediction):
+          p = p.encode('utf-8')
+          print '<%d-J-P%d>: %s' % (i, j, p)
         print ''
       sys.stdout = sys.__stdout__
     #if in_training:
@@ -240,7 +251,7 @@ class Manager(object):
   def create_model(self, sess, config,
                    checkpoint_path=None, cleanup=False):
     with tf.variable_scope('', reuse=tf.AUTO_REUSE):
-      m = getattr(models, config.model_type)(sess, config, self.w_vocab, self.c_vocab)
+      m = getattr(models, config.model_type)(sess, config, self.vocab)
 
     if not checkpoint_path and not cleanup:
       ckpt = tf.train.get_checkpoint_state(self.checkpoint_path)
