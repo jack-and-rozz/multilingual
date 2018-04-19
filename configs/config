@@ -77,7 +77,7 @@ feature_size = 10
 #Pretrained embeddings.
 embedding_path=dataset/embeddings   # The directory where to put your pretrained embeddings file.
 embeddings={
-  en=${fasttext_300d_en_mapped}
+  en=${fasttext_300d_en}
   ja=${fasttext_300d_ja_mapped}
 }
 fasttext_300d_en{
