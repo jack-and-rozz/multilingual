@@ -15,18 +15,17 @@ from core.extensions.pointer import pointer_decoder
 from core.vocabularies import BOS_ID, PAD_ID, BooleanVocab
 
 class HierarchicalSeq2Seq(ModelBase):
-  def __init__(self, sess, config, w_vocab, c_vocab):
+  def __init__(self, sess, config, vocab):
     ModelBase.__init__(self, sess, config)
-    self.w_vocab = w_vocab
-    self.c_vocab = c_vocab
+    self.vocab = vocab
     with tf.name_scope('Placeholders'):
       self.setup_placeholder(config)
 
     with tf.variable_scope('Embeddings'):
-      self.setup_embeddings(config, w_vocab, c_vocab)
+      self.setup_embeddings(config, w_vocab)
 
     with tf.variable_scope('Encoder', reuse=tf.AUTO_REUSE):
-      assert self.w_vocab or self.c_vocab
+      assert self.vocab
       word_repls = self.setup_word_encoder(config)
 
       with tf.variable_scope('Utterance') as scope:
@@ -39,14 +38,14 @@ class HierarchicalSeq2Seq(ModelBase):
 
     # For models that take different decode_state in training and testing.
     with tf.variable_scope('Intermediate') as scope:
-      train_decoder_state, test_decode_state, attention_states = self.setup_decoder_states(config, encoder_outputs, encoder_state, scope=scope)
+      train_decode_state, test_decode_state, attention_states = self.setup_decoder_states(config, encoder_outputs, encoder_state, scope=scope)
 
     with tf.variable_scope('Projection') as scope:
       projection_layer = self.setup_projection(config, scope=scope)
     ## Decoder
     with tf.variable_scope('Decoder') as scope:
       self.logits, self.predictions = self.setup_decoder(
-        config, train_decoder_state, test_decode_state,
+        config, train_decode_state, test_decode_state,
         attention_states=attention_states, 
         encoder_input_lengths=self.context_lengths, 
         projection_layer=projection_layer,
@@ -77,10 +76,6 @@ class HierarchicalSeq2Seq(ModelBase):
       tf.int32, [None, None], name="DecoderOutput")
     self.speaker_changes_ph = tf.placeholder(
       tf.int32, [None, None], name="SpeakerChanges")
-
-    self.is_training = tf.placeholder(tf.bool, [], name='is_training')
-    with tf.name_scope('keep_prob'):
-      self.keep_prob = 1.0 - tf.to_float(self.is_training) * config.dropout_rate
 
     with tf.name_scope('batch_size'):
       self.batch_size = batch_size = shape(self.d_outputs_ph, 0)
@@ -116,7 +111,7 @@ class HierarchicalSeq2Seq(ModelBase):
     with tf.name_scope('targets'):
       self.targets = tf.concat([self.d_outputs_ph, tf.expand_dims(end_tokens, 1)], axis=1)[:, :shape(self.target_weights, 1)]
 
-  def setup_embeddings(self, config, w_vocab, c_vocab):
+  def setup_embeddings(self, config, w_vocab):
     if w_vocab.embeddings is not None:
       initializer = tf.constant_initializer(w_vocab.embeddings) 
       trainable = config.train_embedding
@@ -127,18 +122,6 @@ class HierarchicalSeq2Seq(ModelBase):
       'Word', [w_vocab.size, config.w_embedding_size],
       initializer=initializer,
       trainable=trainable)
-
-    if c_vocab is not None:
-      if c_vocab.embeddings:
-        initializer = tf.constant_initializer(c_vocab.embeddings) 
-        trainable = config.train_embedding
-      else:
-        initializer = None
-        trainable = True 
-      self.c_embeddings = self.initialize_embeddings(
-        'Char', [c_vocab.size, config.c_embedding_size],
-        initializer=initializer,
-        trainable=trainable)
     self.sc_embeddings = self.initialize_embeddings(
       'SpeakerChange', [BooleanVocab.size, config.feature_size],
       trainable=trainable)
@@ -150,12 +133,6 @@ class HierarchicalSeq2Seq(ModelBase):
       word_encoder = WordEncoder(self.keep_prob, shared_scope=scope)
       word_repls.append(word_encoder.encode(w_inputs))
 
-    with tf.variable_scope('Char') as scope:
-      if self.c_vocab:
-        c_inputs = tf.nn.embedding_lookup(self.c_embeddings, self.e_inputs_c_ph)
-        char_encoder = CNNEncoder(self.keep_prob, shared_scope=scope)
-        word_repls.append(char_encoder.encode(c_inputs))
-    word_repls = tf.concat(word_repls, axis=-1) # [batch_size, context_len, utterance_len, word_emb_size + cnn_output_size]
     return word_repls
 
   def setup_uttr_encoder(self, config, word_repls, scope=None):
@@ -285,12 +262,6 @@ class HierarchicalSeq2Seq(ModelBase):
       self.speaker_changes_ph: np.array(batch.speaker_changes)
     }
     feed_dict[self.e_inputs_w_ph] = np.array(batch.w_contexts)
-    if self.c_vocab:
-      feed_dict[self.e_inputs_c_ph] = np.array(batch.c_contexts)
-    # print '<<<<<get_input_feed>>>>'
-    # for k,v in feed_dict.items():
-    #   if type(v) == np.ndarray:
-    #     print k, v #v.shape
 
     return feed_dict
 
@@ -305,10 +276,6 @@ class HierarchicalSeq2Seq(ModelBase):
     epoch_time = 0.0
     for i, batch in enumerate(data):
       feed_dict = self.get_input_feed(batch, do_update)
-      # for x,resx in zip(self.debug, self.sess.run(self.debug, feed_dict)):
-      #   print x
-      #   print resx, resx.shape
-      # exit(1)
       t = time.time()
       output_feed = [self.crossent, self.divergence] 
       if do_update:

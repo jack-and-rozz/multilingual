@@ -38,6 +38,11 @@ class ModelBase(object):
         config.learning_rate, self.global_step,
         config.decay_frequency, config.decay_rate, staircase=True)
 
+    self.is_training = tf.placeholder(tf.bool, [], name='is_training')
+    with tf.name_scope('keep_prob'):
+      self.keep_prob = 1.0 - tf.to_float(self.is_training) * config.dropout_rate
+
+
   def get_updates(self, loss):
     params = tf.contrib.framework.get_trainable_variables()
     opt = tf.train.AdamOptimizer(self.learning_rate)

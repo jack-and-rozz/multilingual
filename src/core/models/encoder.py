@@ -71,7 +71,14 @@ class RNNEncoder(object):
   def __call__(self, *args, **kwargs):
     return self.encode(*args, **kwargs)
 
-  def encode(self, inputs, sequence_length):
+  def encode(self, inputs, sequence_length=None):
+    '''
+    - inputs: [batch_size, max_sent_len, embedding_size]
+    '''
+    # If 'inputs' is a 4-ranked Tensor or more, use HierarchicalEncoderWrapper.
+    assert len(inputs.get_shape()) == 3
+    if sequence_length is None:
+      sequence_length = shape(inputs, 1)
     with tf.variable_scope(self.shared_scope or "RNNEncoder") as scope:
       # TODO: flatten the tensor with rank >= 4 to rank 3 tensor.
       sequence_length, _ = flatten(sequence_length, 1)
@@ -96,7 +103,15 @@ class BidirectionalRNNEncoder(RNNEncoder):
       ) 
 
 
-  def encode(self, inputs, sequence_length):
+  def encode(self, inputs, sequence_length=None):
+    '''
+    - inputs: [batch_size, max_sent_len, hidden_size]
+    '''
+    # If 'inputs' is a 4-ranked Tensor or more, use HierarchicalEncoderWrapper.
+    assert len(inputs.get_shape()) == 3
+    if sequence_length is None:
+      sequence_length = shape(inputs, 1)
+
     with tf.variable_scope(self.shared_scope or "RNNEncoder") as scope:
       # TODO: flatten the tensor with rank >= 4 to rank 3 tensor.
       sequence_length, _ = flatten(sequence_length, 1)
@@ -118,3 +133,30 @@ class BidirectionalRNNEncoder(RNNEncoder):
       outputs = tf.reshape(outputs, output_shape)
       state = tf.reshape(state, state_shape)
     return outputs, state
+
+
+class HierarchicalEncoderWrapper(object):
+  def __init__(self, encoders):
+    '''
+    Args:
+    - encoders: a tuple of (sent_encoder, context_encoder).
+    '''
+    self.encoders = encoders
+
+  def encode(self, inputs, sequence_lengths):
+    '''
+    Args:
+    - inputs: [batch_size, max_context_len, max_sentence_len, embedding_size]
+    - sequence_lengths: a tuple of (sentence_length, context_length)
+    Res:
+    - outputs: [batch_size, max_context_len, hidden_size] 
+    - state: [batch_size, hidden_size] 
+    '''
+    # It can handle only 4-ranked tensor as inputs for now.
+    assert len(inputs.get_shape()) == 4
+    assert len(sequence_lengths) == 2
+    _, state = self.encoders[0].encode(inputs, sequence_length[0]) #[batch_size, max_context_len, hidden_size]
+    return self.encoders[1].encode(state, sequence_length[1]) # [batch_size, ]
+    
+
+    
