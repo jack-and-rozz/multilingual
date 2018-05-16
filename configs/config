@@ -36,7 +36,7 @@ decoder{
   output_size=${hidden_size}
   num_layers=${num_layers}
 }
-model_type=AutoEncoder
+model_type=MultiLangDialogueModelWithAutoEncoder
 beam_width=5
 length_penalty_weight=0.6 # https://arxiv.org/pdf/1609.08144.pdf
 
@@ -47,7 +47,7 @@ dataset_path=dataset/dailydialog
 dataset_info { # The train/valid/test dataset.
   train = {
     path = ${dataset_path}/train.csv
-    max_lines = 0 # The maximum size of training data. if 0, all of the training data will be used.
+    max_lines = 1000 # The maximum size of training data. if 0, all of the training data will be used.
   }
   valid = {
     path = ${dataset_path}/valid.csv

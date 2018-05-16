@@ -48,7 +48,7 @@ class Manager(object):
         normalize_digits=self.config.normalize_digits,
         skip_first=emb_conf.ja.skip_first)
 
-      self.c_vocab = None
+    self.c_vocab = None
     #self.w_vocab, self.c_vocab = data_class.create_vocab_from_data(self.config)
     self.dataset = data_class(self.config.dataset_info, 
                               self.vocab.e_word, self.c_vocab)
@@ -111,9 +111,8 @@ class Manager(object):
         os.system(cmd)
 
   @common.timewatch()
-  def train(self, model=None):
-    if model is None:
-      model = self.create_model(self.sess, self.config)
+  def train(self):
+    model = self.create_model(self.sess, self.config)
     testing_results = []
     for epoch in xrange(model.epoch.eval(), self.config.max_epoch):
       sys.stderr.write('Epoch %d:  Start Training...\n' % epoch)
@@ -251,7 +250,8 @@ class Manager(object):
   def create_model(self, sess, config,
                    checkpoint_path=None, cleanup=False):
     with tf.variable_scope('', reuse=tf.AUTO_REUSE):
-      m = getattr(models, config.model_type)(sess, config, self.vocab)
+      model_type = getattr(models, config.model_type)
+      m = model_type(sess, config, self.vocab)
 
     if not checkpoint_path and not cleanup:
       ckpt = tf.train.get_checkpoint_state(self.checkpoint_path)

@@ -126,7 +126,8 @@ class MultiLangDialogueModelWithAutoEncoder(ModelBase):
                                            use_bias=True, trainable=True)
     source_emb = tf.cond(self.source_lang, self.word_emb.en, self.word_emb.ja))
     target_emb = tf.cond(self.target_lang, self.word_emb.en, self.word_emb.ja))
-    projection_layer = tf.cond(self.)
+    projection_layer = tf.cond(self.target_lang, 
+                               self.projection.en, self.projection.ja)
 
     with tf.variable_scope('Encoder'):
       with tf.variable_scope('Sent') as scope:
@@ -141,7 +142,7 @@ class MultiLangDialogueModelWithAutoEncoder(ModelBase):
         context_encoder = HierarchicalEncoderWrapper((sent_encoder, context_encoder))
     shared_scope = tf.get_variable_scope()
 
-    # Define 4 models (2 tasks * 2 langs) under the SAME scope.
+    # Define models.
     self.models = dotDict()
     with tf.name_scope('En'):
       with tf.name_scope('Dialogue'):
