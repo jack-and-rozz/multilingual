@@ -31,27 +31,33 @@ class Manager(object):
 
     sys.stderr.write(str(self.config) + '\n')
 
-    data_class = getattr(datasets, self.config.dataset_type)
-    self.vocab = common.dotDict()
+    self.vocab = common.recDotDict({'en': {}, 'ja': {}})
     if self.config.embeddings:
       emb_conf = self.config.embeddings
-      self.vocab.e_word = vocabularies.WordVocabularyWithEmbedding(
+      self.vocab.en.word = vocabularies.WordVocabularyWithEmbedding(
         emb_conf.en.path, 
         vocab_size=self.config.w_vocab_size,
         lowercase=self.config.lowercase,
         normalize_digits=self.config.normalize_digits,
         skip_first=emb_conf.en.skip_first)
-      self.vocab.j_word = vocabularies.WordVocabularyWithEmbedding(
+      self.vocab.ja.word = vocabularies.WordVocabularyWithEmbedding(
         emb_conf.ja.path, 
         vocab_size=self.config.w_vocab_size,
         lowercase=self.config.lowercase,
         normalize_digits=self.config.normalize_digits,
         skip_first=emb_conf.ja.skip_first)
 
-    self.c_vocab = None
-    #self.w_vocab, self.c_vocab = data_class.create_vocab_from_data(self.config)
-    self.dataset = data_class(self.config.dataset_info, 
-                              self.vocab.e_word, self.c_vocab)
+    self.vocab.en.char = None
+    self.vocab.ja.char = None
+    self.dataset = common.dotDict()
+    data_class = getattr(datasets, self.config.dataset_info.dailydialog.dataset_type)
+    self.dataset.dailydialog = data_class(self.config.dataset_info.dailydialog, 
+                                          self.vocab.en.word, 
+                                          self.vocab.en.char)
+    data_class = getattr(datasets, self.config.dataset_info.meidai.dataset_type)
+    self.dataset.meidai = data_class(self.config.dataset_info.meidai, 
+                                     self.vocab.jp.word, 
+                                     self.vocab.jp.char)
 
   def load_config(self, args):
     self.model_path = args.checkpoint_path
@@ -120,13 +126,13 @@ class Manager(object):
       train_batches = self.dataset.train.get_batch(
         self.config.batch_size, 
         utterance_max_len=self.config.utterance_max_len, shuffle=True)
-      train_loss, train_summary, epoch_time = model.train(train_batches, do_update=True)
+      train_loss, train_summary, epoch_time = model.train(train_batches)
       self.logger.info('(Epoch %d) Train loss: %.3f (%.1f sec)' % (epoch, train_loss, epoch_time))
 
       valid_batches = self.dataset.valid.get_batch(
         self.config.batch_size, 
         utterance_max_len=self.config.utterance_max_len, shuffle=False)
-      valid_loss, valid_summary, epoch_time = model.train(valid_batches, do_update=False)
+      valid_loss, valid_summary, epoch_time = model.valid(valid_batches)
       self.logger.info('(Epoch %d) Valid loss: %.3f (%.1f sec)' % (epoch, valid_loss, epoch_time))
 
       # summary = tf_utils.make_summary({
@@ -169,6 +175,9 @@ class Manager(object):
       print df
       sys.stdout = sys.__stdout__
   def debug(self):
+    model = self.create_model(self.sess, self.config)
+    exit(1)
+
     self.dataset.train.load_data()
     print self.dataset.train.size
     config = self.config
@@ -305,7 +314,7 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument("checkpoint_path")
   parser.add_argument("mode")
-  parser.add_argument("config_path")
+  parser.add_argument("--config_path", default='configs/config')
 
   parser.add_argument("--cleanup", default=False, type=common.str2bool)
   parser.add_argument("--interactive", default=False, type=common.str2bool)

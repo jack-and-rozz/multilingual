@@ -54,9 +54,10 @@ class WordEncoder(object):
     return outputs
 
 class RNNEncoder(object):
-  def __init__(self, config, keep_prob,
+  def __init__(self, config, keep_prob, embeddings=None,
                activation=tf.nn.relu, shared_scope=None):
     self.keep_prob = keep_prob
+    self.embeddings = embeddings
     self.activation = activation
     self.shared_scope = shared_scope
     self.output_size = config.output_size
@@ -71,20 +72,26 @@ class RNNEncoder(object):
   def __call__(self, *args, **kwargs):
     return self.encode(*args, **kwargs)
 
-  def encode(self, inputs, sequence_length=None):
+  def reshape_inputs(self, inputs, sequence_length):
+    # Lookup embeddings only when the inputs are integers.
+    if inputs.dtype == tf.int32:
+      assert self.embeddings is not None
+      inputs = tf.nn.embedding_lookup(self.embeddings, inputs)
+    # flatten the tensor with rank >= 2 to rank 1 tensor.
+    sequence_length, _ = flatten(sequence_length, 1)
+
+    # flatten the tensor with rank >= 4 to rank 3 tensor.
+    inputs, prev_shape = flatten(inputs, 3) # [*, max_sequence_length, hidden_size]
+    output_shape = prev_shape[:-1] + [self.output_size]
+    state_shape = prev_shape[:-2] + [self.output_size]
+    return inputs, sequence_length, output_shape, state_shape 
+
+  def encode(self, inputs, sequence_length):
     '''
-    - inputs: [batch_size, max_sent_len, embedding_size]
+    - inputs: [batch_size, max_sent_len]
     '''
-    # If 'inputs' is a 4-ranked Tensor or more, use HierarchicalEncoderWrapper.
-    assert len(inputs.get_shape()) == 3
-    if sequence_length is None:
-      sequence_length = shape(inputs, 1)
     with tf.variable_scope(self.shared_scope or "RNNEncoder") as scope:
-      # TODO: flatten the tensor with rank >= 4 to rank 3 tensor.
-      sequence_length, _ = flatten(sequence_length, 1)
-      inputs, prev_shape = flatten(inputs, 3) # [*, max_sequence_length, hidden_size]
-      output_shape = prev_shape[:-1] + [self.output_size]
-      state_shape = prev_shape[:-2] + [self.output_size]
+      inputs, sequence_length, output_shape, state_shape = self.reshape_inputs(inputs, sequence_length)
       outputs, state = tf.nn.dynamic_rnn(
         self.cell_fw, inputs,
         sequence_length=sequence_length, dtype=tf.float32, scope=scope)
@@ -102,23 +109,12 @@ class BidirectionalRNNEncoder(RNNEncoder):
         num_layers=self.num_layers, keep_prob=self.keep_prob
       ) 
 
-
   def encode(self, inputs, sequence_length=None):
     '''
     - inputs: [batch_size, max_sent_len, hidden_size]
     '''
-    # If 'inputs' is a 4-ranked Tensor or more, use HierarchicalEncoderWrapper.
-    assert len(inputs.get_shape()) == 3
-    if sequence_length is None:
-      sequence_length = shape(inputs, 1)
-
     with tf.variable_scope(self.shared_scope or "RNNEncoder") as scope:
-      # TODO: flatten the tensor with rank >= 4 to rank 3 tensor.
-      sequence_length, _ = flatten(sequence_length, 1)
-      inputs, prev_shape = flatten(inputs, 3) # [*, max_sequence_length, hidden_size]
-      output_shape = prev_shape[:-1] + [self.output_size]
-      state_shape = prev_shape[:-2] + [self.output_size]
-
+      inputs, sequence_length, output_shape, state_shape = self.reshape_inputs(inputs, sequence_length)
       outputs, state = tf.nn.bidirectional_dynamic_rnn(
         self.cell_fw, self.cell_bw, inputs,
         sequence_length=sequence_length, dtype=tf.float32, scope=scope)
@@ -152,11 +148,9 @@ class HierarchicalEncoderWrapper(object):
     - outputs: [batch_size, max_context_len, hidden_size] 
     - state: [batch_size, hidden_size] 
     '''
-    # It can handle only 4-ranked tensor as inputs for now.
-    assert len(inputs.get_shape()) == 4
     assert len(sequence_lengths) == 2
-    _, state = self.encoders[0].encode(inputs, sequence_length[0]) #[batch_size, max_context_len, hidden_size]
-    return self.encoders[1].encode(state, sequence_length[1]) # [batch_size, ]
+    _, state = self.encoders[0].encode(inputs, sequence_lengths[0]) #[batch_size, max_context_len, hidden_size]
+    return self.encoders[1].encode(state, sequence_lengths[1]) # [batch_size, ]
     
 
     

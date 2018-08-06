@@ -101,8 +101,12 @@ class VocabularyBase(object):
     self.name = None
 
   @property
-  def size(self):
+  def vocab_size(self):
     return len(self.vocab)
+
+  @property
+  def emb_size(self):
+    return len(self.embeddings[0]) if self.embeddings is not None else None
 
 class WordVocabularyBase(VocabularyBase):
   def id2word(self, _id):

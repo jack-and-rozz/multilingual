@@ -48,7 +48,7 @@ class ModelBase(object):
     opt = tf.train.AdamOptimizer(self.learning_rate)
     gradients = [grad for grad, _ in opt.compute_gradients(loss)]
     clipped_gradients, _ = tf.clip_by_global_norm(gradients, 
-                                                    self.max_gradient_norm)
+                                                  self.max_gradient_norm)
     grad_and_vars = [(g, v) for g, v in zip(clipped_gradients, params)]
     updates = opt.apply_gradients(
       grad_and_vars, global_step=self.global_step)
