@@ -8,7 +8,7 @@ max_gradient_norm = 5.0 #
 decay_rate = 0.99       #
 decay_frequency = 100   #
 dropout_rate=0.2        # The dropout ratio in training. 
-train_embedding=true    # Whether to retrain the pretrained embeddings or not.
+train_embedding=false   # Whether to retrain the pretrained embeddings or not.
 batch_size=128          # Batch size.
 
 # Structure.
