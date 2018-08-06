@@ -189,27 +189,6 @@ class Manager(object):
       print i, 
       for t in b.texts:
         print self.vocab.e_word.id2sent(t)
-    #   for j, (ori_w_context, ori_response, w_context, c_context, response, speaker_change) in enumerate(zip(b.ori_w_contexts, b.ori_responses, b.w_contexts, b.c_contexts, b.responses, b.speaker_changes)):
-    #     print '<%d>' % cnt
-    #     print 'contexts(origin):', ori_w_context
-    #     print 'w_contexts(token):', [self.w_vocab.id2sent(x, join=True) for x in w_context] 
-    #     #print w_context
-    #     #print 'ori_w_context'
-    #     if self.c_vocab:
-    #       print 'c_contexts:', 
-    #       #print c_context
-    #       print [self.c_vocab.id2sent(x, join=True) for x in c_context]
-    #       print 
-    #     print 'response(origin):', ori_response
-    #     print 'response(token):',
-    #     #print response
-    #     print self.w_vocab.id2sent(response, join=True)
-    #     print 'speaker_changes', dataset.sc_vocab.id2sent(speaker_change)
-    #     #print dataset.sc_vocab.rev_vocab
-    #     cnt += 1
-    #   #exit(1)
-    # self.w_vocab.embeddings.shape
-    # pass
 
   def demo(self, model=None, inp=None):
     if model is None:
